@@ -1,0 +1,378 @@
+<?php
+error_reporting(E_ALL);
+/**
+ * Creole module performs Creole Wiki formatting
+ */
+
+/**
+ * This hook allows filters to provide help text to users during the content
+ * editing process. Short tips are provided on the content editing screen, while
+ * long tips are provided on a separate linked page. Short tips are optional,
+ * but long tips are highly recommended.
+ */
+function creole_filter_tips($delta, $format, $long = FALSE)
+{
+  switch ($delta) {
+    case 0:
+      if ($long) {
+        return 'Wiki Creole markup input filter';
+      }
+      else {
+        return 'Wiki Creole markup input filter';
+      }
+      break;
+  }
+}
+
+/**
+ * The main filter function.
+ */
+function creole_filter($op, $delta = 0, $format = -1, $text = '')
+{
+  // The "list" operation provides the module an opportunity to declare both how
+  // many filters it defines and a human-readable name for each filter. Note that
+  // the returned name should be passed through t() for translation.
+  if ($op == 'list') {
+    return array(t('Creole Wiki formatting'));
+  }
+
+  switch ($delta) {
+  case 0:
+
+      switch ($op) {
+      case 'description':
+          // This description is shown in the administrative interface, unlike the
+          // filter tips which are shown in the content editing interface.
+          return t('Creole Wiki format filter');
+
+      case 'prepare':
+	  return $text;
+
+      case 'process':
+          return creole_process($text);
+
+      case 'settings':
+	  $form = array();
+          return $form;
+      }
+      break;
+  }
+}
+
+function creole_process($text)
+{
+    $text = str_replace("\r\n", "\n", $text);
+    $text = str_replace("\r", "\n", $text);
+    $text = str_replace('<', '&lt;', str_replace('>', '&gt;', str_replace('&', '&amp;', $text)));
+
+    $text = creole_process_x('{{{{', '[^\{\}]|[^\{].*[^\}]', '}}}}',
+	'', '\{\{\{\{', '&0',
+	'creole_process_verbatim', 'creole_process_non_verbatim',
+	$text);
+
+    $text = creole_process_post($text);
+    return $text;
+}
+
+function creole_process_post($text)
+{
+    $text = str_replace("<br/>", "<br/>\n", $text);
+    return $text;
+}
+
+function creole_process_verbatim($text)
+{
+    return '<pre>'. str_replace(' ', '&nbsp;', $text) .'</pre>';
+}
+
+function creole_process_non_verbatim($text)
+{
+    return creole_process_x('{{{', '[^\{\}]|[^\{].*[^\}]', '}}}',
+	'', '\{\{\{', '&1',
+	'creole_process_code', 'creole_process_paragraphs',
+	$text);
+}
+
+function creole_process_code($text)
+{
+    return '<tt>' . str_replace("\n", "<br/>", str_replace(' ', '&nbsp;', $text)) . '</tt>';
+}
+
+function creole_process_paragraphs($text)
+{
+    $paragraphs = preg_split("/\n( *\n)+/", $text);
+    $paragraphs = array_map('creole_process_paragraph', $paragraphs);
+    $text = join("<br/><br/>", $paragraphs);
+    return $text;
+}
+
+function creole_process_paragraph($text)
+{
+    $text = creole_process_headings($text);
+    $text = creole_process_lists($text);
+    $text = creole_process_links($text);
+    $text = creole_process_styles($text);
+    $text = creole_process_hr($text);
+    $text = creole_process_line_breaks($text);
+    return $text;
+}
+
+function creole_process_x($begin, $re, $end, $out_delim, $rex, $sub, $fn_in, $fn_out, $text)
+{
+    $in_blocks = array();
+    $buffer = '';
+    $regex = '/'. creole_preg_quote($begin) .'('. $re .')'. creole_preg_quote($end) .'/sU';
+    $rex = '/'. $rex .'/';
+    $a = preg_split($regex, $text, 2, PREG_SPLIT_DELIM_CAPTURE);
+    while (count($a) == 3) {
+	if ($out_delim != '' && creole_str_endswith($a[0], $out_delim)
+	 || preg_match($rex, $a[1])) {
+	    $buffer .= $a[0] . $begin;
+	    $text = $a[1] . $end . $a[2];
+	}
+	else {
+	    $buffer .= $a[0] . $sub;
+	    $in_blocks[] = $fn_in($a[1]);
+	    $text = $a[2];
+	}
+	$a = preg_split($regex, $text, 2, PREG_SPLIT_DELIM_CAPTURE);
+    }
+
+    $text = $fn_out($buffer . $text);
+
+    $i = 0;
+    $buffer = '';
+    $regex = '/('. creole_preg_quote($sub) .')/sU';
+    $a = preg_split($regex, $text, 2, PREG_SPLIT_DELIM_CAPTURE);
+    while (count($a) == 3) {
+	$buffer .= $a[0] . $in_blocks[$i];
+	$i += 1;
+	$text = $a[2];
+
+	$a = preg_split($regex, $text, 2, PREG_SPLIT_DELIM_CAPTURE);
+    }
+
+    $text = $buffer . $text;
+    return $text;
+}
+
+function creole_process_headings($text)
+{
+    $text = preg_replace("/^====== ([^\n]*)( ======)? *$/mU", "<h6>$1</h6>", $text);
+    $text = preg_replace("/^===== ([^\n]*)( =====)? *$/mU", "<h5>$1</h5>", $text);
+    $text = preg_replace("/^==== ([^\n]*)( ====)? *$/mU", "<h4>$1</h4>", $text);
+    $text = preg_replace("/^=== ([^\n]*)( ===)? *$/mU", "<h3>$1</h3>", $text);
+    $text = preg_replace("/^== ([^\n]*)( ==)? *$/mU", "<h2>$1</h2>", $text);
+    $text = preg_replace("/^= ([^\n]*)( =)? *$/mU", "<h1>$1</h1>", $text);
+    return $text;
+}
+
+function creole_process_lists($text)
+{
+    $buffer = '';
+    $a = preg_split('/^([#\*])( +.*)$/mU', $text, 2, PREG_SPLIT_DELIM_CAPTURE);
+    while (count($a) == 4) {
+	$buffer .= $a[0];
+	$list_text = creole_process_list($a[1], $a[1] . $a[2] . $a[3]);
+	$buffer .= $list_text[0];
+	$text = $list_text[1];
+	$a = preg_split('/^([#\*])( +.*)$/mU', $text, 2, PREG_SPLIT_DELIM_CAPTURE);
+    }
+    $text = $buffer . $text;
+    return $text;
+}
+
+function creole_process_list($type, $text)
+{
+    $list = '';
+    $a = preg_split('/^'.creole_preg_quote($type).'( +.*)$/mU', $text, 2, PREG_SPLIT_DELIM_CAPTURE);
+    while (count($a) == 3 && preg_match("/^[ \n]*$/", $a[0]) > 0) {
+	$list .= "<li>" . trim($a[1]);
+
+	$text = $a[2];
+	if (creole_str_startswith($text, "\n". $type{0}.$type.' ')) {
+	    $list_text = creole_process_list($type{0}.$type, $text);
+	    $list .= $list_text[0];
+	    $text = $list_text[1];
+	}
+	else if (creole_str_startswith($text, "\n". strtr($type{0}.$type, '#*', '*#').' ')) {
+	    $list_text = creole_process_list(strtr($type{0}.$type, '#*', '*#'), $text);
+	    $list .= $list_text[0];
+	    $text = $list_text[1];
+	}
+	$list .= "</li>";
+	$a = preg_split('/^'.creole_preg_quote($type).'( +.*)$/mU', $text, 2, PREG_SPLIT_DELIM_CAPTURE);
+    }
+    if ($type{0} == '#')
+	$list = "<ol>". $list ."</ol>";
+    else
+	$list = "<ul>". $list ."</ul>";
+
+    return array($list, $text);
+}
+
+function creole_process_links($text)
+{
+    $text = preg_replace('/\[\[([!-Z\\^-\{\}~]+)\]\]/U', '<a href="\1">\1</a>', $text);
+
+    $buffer = '';
+    $re = '/\[\[([!-Z\\^-\{\}~]+)\|([ -Z\\^-~]+)\]\]/U';
+    $a = preg_split($re, $text, 2, PREG_SPLIT_DELIM_CAPTURE);
+    while (count($a) == 4) {
+	$buffer .= $a[0] .'<a href="'. $a[1] .'">'. creole_process_img_links($a[2]) .'</a>';
+	$text = $a[3];
+	$a = preg_split($re, $text, 2, PREG_SPLIT_DELIM_CAPTURE);
+    }
+    $text = $buffer . $text;
+
+    $text = creole_process_img_links($text);
+    return $text;
+}
+
+function creole_process_img_links($text)
+{
+    $text = preg_replace('/\{\{([!-{~]+)\}\}/U', '<img src="\1"/>', $text);
+    $text = preg_replace('/\{\{([!-{~]+)\|([ -z~]+)\}\}/U', '<img src="\1" alt="\2"/>', $text);
+    $text = preg_replace('/\[\]([!-Z\\^-\{\}~]+\.(jpg|jpeg|png|gif))\]\]/U', '<img src="\1"/>', $text);
+    $text = preg_replace('/\[\]([!-Z\\^-\{\}~]+\.(jpg|jpeg|png|gif))\|([ -Z\\^-~]]+)\]\]/U', '<img src="\1" alt="\3"/>', $text);
+    return $text;
+}
+
+function creole_process_hr($text)
+{
+    $text = preg_replace('/^(----+)$/mU', '<hr/>', $text);
+    return $text;
+}
+
+function creole_process_styles($text)
+{
+    $text = creole_process_bold($text);
+    $text = creole_process_italics($text);
+    $text = creole_process_underline($text);
+    $text = creole_process_subscript($text);
+    $text = creole_process_superscript($text);
+    $text = creole_process_smaller($text);
+    $text = creole_process_larger($text);
+    $text = creole_process_strikethru($text);
+    $text = creole_process_monospace($text);
+    return $text;
+}
+
+function creole_identity($text)
+{
+    return $text;
+}
+
+function creole_b_i($text)
+{
+    return '<b><i>'. $text .'</i></b>';
+}
+
+function creole_process_bold($text)
+{
+    return creole_process_style('/\*\*([^\* ]|[^\* ].*[^ \*])\*\*/U', '<b>', '</b>', $text);
+}
+
+function creole_b($text)
+{
+    return '<b>'. $text .'</b>';
+}
+
+function creole_process_italics($text)
+{
+    $text = creole_process_x('//', '[^\/ ]|[^\/ ].*[^ \/]', '//',
+	':', ':$', '&3',
+	'creole_process_italic', 'creole_identity',
+	$text);
+    return $text;
+}
+
+function creole_process_italic($text)
+{
+    return '<i>'. $text .'</i>';
+}
+
+function creole_process_underline($text)
+{
+    return creole_process_style('/__([^ ]|[^ ].*[^ ])__/U', '<u>', '</u>', $text);
+}
+
+function creole_process_subscript($text)
+{
+    return creole_process_style('/,,([^ ]|[^ ].*[^ ]),,/U', '<sub>', '</sub>', $text);
+}
+
+function creole_process_superscript($text)
+{
+    return creole_process_style('/\^([^ ]|[^ ].*[^ ])\^/U', '<sup>', '</sup>', $text);
+}
+
+function creole_process_smaller($text)
+{
+    $text = creole_process_x('~-', '[^ ]|[^ ].*[^ ]', '-~',
+	'', '~-|-~', '&3',
+	'creole_small', 'creole_identity',
+	$text);
+    return $text;
+}
+
+function creole_small($text)
+{
+    return '<small>'. $text .'</small>';
+}
+
+function creole_process_larger($text)
+{
+    return creole_process_style('/~\+([^ ]|[^ ].*[^ ])\+~/U', '<big>', '</big>', $text);
+}
+
+function creole_process_strikethru($text)
+{
+    return creole_process_style('/--\(([^ ]|[^ ].*[^ ])\)--/U', '<del>', '</del>', $text);
+}
+
+function creole_process_monospace($text)
+{
+    return creole_process_style('/`([^` ]|[^` ].*[^ `])`/U', '<tt>', '</tt>', $text);
+}
+
+function creole_process_style($re, $l, $r, $text)
+{
+    $buffer = '';
+    $a = preg_split($re, $text, 2, PREG_SPLIT_DELIM_CAPTURE);
+    while (count($a) == 3) {
+	$buffer .= $a[0] . $l . $a[1] . $r;
+	$text = $a[2];
+	$a = preg_split($re, $text, 2, PREG_SPLIT_DELIM_CAPTURE);
+    }
+    $text = $buffer . $text;
+    return $text;
+}
+
+function creole_process_line_breaks($text)
+{
+    $text = preg_replace("/\\\\\\\\ *\n?/", "<br/>\n", $text);
+    return $text;
+}
+
+function creole_preg_quote($text)
+{
+    return str_replace('/', '\/', preg_quote($text));
+}
+
+function creole_str_startswith($s, $prefix)
+{
+    return substr($s, 0, strlen($prefix)) == $prefix;
+}
+
+function creole_str_endswith($s, $prefix)
+{
+    $len = strlen($prefix);
+    return substr($s, strlen($s) - $len, $len) == $prefix;
+}
+
+function creole_debug($msg)
+{
+    file_put_contents("creole.log", $msg ."\n", FILE_APPEND);
+}
+?>

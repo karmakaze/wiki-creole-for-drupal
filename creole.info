@@ -1,0 +1,11 @@
+name = Wiki Creole markup
+description = Allows content to be written using Wiki Creole format, a simple and universal plain-text syntax that is transformed into valid XHTML.
+package = "Input filters"
+dependencies[] = filter
+core = 6.x
+
+version = "6.x-0.1"
+core = "6.x"
+project = "creole"
+datestamp = "1266624000"
+
