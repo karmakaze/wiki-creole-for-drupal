@@ -1,4 +1,12 @@
 <?php
+/*
+ * Creole wiki markup input filter for Drupal 6.x
+ *
+ * Website: https://code.google.com/p/wiki-creole-for-drupal/
+ * Author: Keith Kim
+ * License: GPL v3
+ */
+
 error_reporting(E_ALL);
 /**
  * Creole module performs Creole Wiki formatting
@@ -129,53 +137,11 @@ function creole_process_paragraphs($text)
     return $text;
 }
 
+
 function creole_process_paragraph($text)
 {
     $text = creole_process_headings($text);
-    $text = creole_process_lists($text);
-    $text = creole_process_links($text);
-    $text = creole_process_styles($text);
-    $text = creole_process_hr($text);
-    $text = creole_process_line_breaks($text);
-    return $text;
-}
-
-function creole_process_x($begin, $re, $end, $out_delim, $rex, $sub, $fn_in, $fn_out, $text)
-{
-    $in_blocks = array();
-    $buffer = '';
-    $regex = '/'. creole_preg_quote($begin) .'('. $re .')'. creole_preg_quote($end) .'/sU';
-    $rex = '/'. $rex .'/';
-    $a = preg_split($regex, $text, 2, PREG_SPLIT_DELIM_CAPTURE);
-    while (count($a) == 3) {
-	if ($out_delim != '' && creole_str_endswith($a[0], $out_delim)
-	 || preg_match($rex, $a[1])) {
-	    $buffer .= $a[0] . $begin;
-	    $text = $a[1] . $end . $a[2];
-	}
-	else {
-	    $buffer .= $a[0] . $sub;
-	    $in_blocks[] = $fn_in($a[1]);
-	    $text = $a[2];
-	}
-	$a = preg_split($regex, $text, 2, PREG_SPLIT_DELIM_CAPTURE);
-    }
-
-    $text = $fn_out($buffer . $text);
-
-    $i = 0;
-    $buffer = '';
-    $regex = '/('. creole_preg_quote($sub) .')/sU';
-    $a = preg_split($regex, $text, 2, PREG_SPLIT_DELIM_CAPTURE);
-    while (count($a) == 3) {
-	$buffer .= $a[0] . $in_blocks[$i];
-	$i += 1;
-	$text = $a[2];
-
-	$a = preg_split($regex, $text, 2, PREG_SPLIT_DELIM_CAPTURE);
-    }
-
-    $text = $buffer . $text;
+    $text = creole_process_tables($text);
     return $text;
 }
 
@@ -187,6 +153,72 @@ function creole_process_headings($text)
     $text = preg_replace("/^=== ([^\n]*)( ===)? *$/mU", "<h3>$1</h3>", $text);
     $text = preg_replace("/^== ([^\n]*)( ==)? *$/mU", "<h2>$1</h2>", $text);
     $text = preg_replace("/^= ([^\n]*)( =)? *$/mU", "<h1>$1</h1>", $text);
+    return $text;
+}
+
+function creole_process_tables($text)
+{
+    $buffer = '';
+    $a = preg_split('/^(\|.*\|.*)$/mU', $text, 2, PREG_SPLIT_DELIM_CAPTURE);
+    while (count($a) == 3) {
+	$rows = array();
+	$buffer .= creole_process_text($a[0]);
+	$rows[] = substr($a[1], 1);
+	$text = $a[2];
+
+	while (creole_str_startswith($text, "\n|")) {
+	    $a = preg_split('/^(\|.*\|.*)$/mU', $text, 2, PREG_SPLIT_DELIM_CAPTURE);
+	    if (count($a) != 3 || strlen($a[0]) > 1)
+	    	break;
+	    $rows[] = substr($a[1], 1);
+	    $text = $a[2];
+	}
+	$buffer .= creole_render_table($rows);
+	$a = preg_split('/^(\|.*\|.*)$/mU', $text, 2, PREG_SPLIT_DELIM_CAPTURE);
+    }
+    $text = $buffer . creole_process_text($text);
+    return $text;
+}
+
+function creole_render_table($rows)
+{
+    $maxcols = 0;
+    foreach ($rows as $text) {
+	$cols = preg_split('/\|/', $text);
+	$ncols = count($cols);
+	if (strlen($cols[$ncols-1]) == 0)
+	    $ncols -= 1;
+	if ($ncols > $maxcols)
+	    $maxcols = $ncols;
+    }
+
+    $buffer = "<table border=\"1\">\n";
+    foreach ($rows as $text) {
+	$buffer .= "<tr>\n";
+	$cols = preg_split('/\|/', $text);
+	$col = 0;
+	foreach ($cols as $cell) {
+	    if ($col < $maxcols) {
+		if (creole_str_startswith($cell, '='))
+		    $buffer .= "<th>". trim($cell, "= ") ."</th>\n";
+		else
+		    $buffer .= "<td>". creole_process_text($cell) ."</td>\n";
+	    }
+	    $col += 1;
+	}
+	$buffer .= "</tr>\n";
+    }
+    $buffer .= "</table>\n";
+    return $buffer;
+}
+
+function creole_process_text($text)
+{
+    $text = creole_process_lists($text);
+    $text = creole_process_links($text);
+    $text = creole_process_styles($text);
+    $text = creole_process_hr($text);
+    $text = creole_process_line_breaks($text);
     return $text;
 }
 
@@ -264,6 +296,45 @@ function creole_process_img_links($text)
 function creole_process_hr($text)
 {
     $text = preg_replace('/^(----+)$/mU', '<hr/>', $text);
+    return $text;
+}
+
+function creole_process_x($begin, $re, $end, $out_delim, $rex, $sub, $fn_in, $fn_out, $text)
+{
+    $in_blocks = array();
+    $buffer = '';
+    $regex = '/'. creole_preg_quote($begin) .'('. $re .')'. creole_preg_quote($end) .'/sU';
+    $rex = '/'. $rex .'/';
+    $a = preg_split($regex, $text, 2, PREG_SPLIT_DELIM_CAPTURE);
+    while (count($a) == 3) {
+	if ($out_delim != '' && creole_str_endswith($a[0], $out_delim)
+	 || preg_match($rex, $a[1])) {
+	    $buffer .= $a[0] . $begin;
+	    $text = $a[1] . $end . $a[2];
+	}
+	else {
+	    $buffer .= $a[0] . $sub;
+	    $in_blocks[] = $fn_in($a[1]);
+	    $text = $a[2];
+	}
+	$a = preg_split($regex, $text, 2, PREG_SPLIT_DELIM_CAPTURE);
+    }
+
+    $text = $fn_out($buffer . $text);
+
+    $i = 0;
+    $buffer = '';
+    $regex = '/('. creole_preg_quote($sub) .')/sU';
+    $a = preg_split($regex, $text, 2, PREG_SPLIT_DELIM_CAPTURE);
+    while (count($a) == 3) {
+	$buffer .= $a[0] . $in_blocks[$i];
+	$i += 1;
+	$text = $a[2];
+
+	$a = preg_split($regex, $text, 2, PREG_SPLIT_DELIM_CAPTURE);
+    }
+
+    $text = $buffer . $text;
     return $text;
 }
 
@@ -432,12 +503,10 @@ function _creole_help_block()
 	"Horizontal line:\n" .
 	"----\n" . 
 	"\n" .
-/*
-	"|=|=table=|=header=|\n" .
+	"|=|=table|=header|\n" .
 	"|a|table|row|\n" .
 	"|b|table|row|\n" .
 	"\n" .
-*/
 	"{{{\n" .
 	"== [[Nowiki]]:\n" .
 	"//**don't** format//\n" .
