@@ -12,16 +12,34 @@ error_reporting(E_ALL);
  */
 function creole_filter_tips($delta, $format, $long = FALSE)
 {
-  switch ($delta) {
+    switch ($delta) {
     case 0:
-      if ($long) {
-        return 'Wiki Creole markup input filter';
-      }
-      else {
-        return 'Wiki Creole markup input filter';
-      }
-      break;
-  }
+	if ($long) {
+	  return 'Wiki Creole markup input filter';
+	}
+	else {
+	  return 'Wiki Creole markup input filter';
+	}
+	break;
+    }
+}
+
+/**
+ * The block hook function.
+ */
+function creole_block($op = 'list', $delta = 0, $edit = array())
+{
+    switch ($op) {
+    case 'list':
+	return array('help' => array('info' => t('Creole wiki filter tips')));
+    case 'view':
+	switch($delta) {
+	case 'help':
+	    return array( 'subject' => t('Creole markup tips'),
+			  'content' => _creole_help_block() );
+	}
+	break;
+    }
 }
 
 /**
@@ -33,7 +51,7 @@ function creole_filter($op, $delta = 0, $format = -1, $text = '')
   // many filters it defines and a human-readable name for each filter. Note that
   // the returned name should be passed through t() for translation.
   if ($op == 'list') {
-    return array(t('Creole Wiki formatting'));
+      return array(t('Creole Wiki formatting'));
   }
 
   switch ($delta) {
@@ -78,6 +96,11 @@ function creole_process_post($text)
 {
     $text = str_replace("<br/>", "<br/>\n", $text);
     return $text;
+}
+
+function creole_nl2br($text)
+{
+    return str_replace("\n", "<br/>\n", $text);
 }
 
 function creole_process_verbatim($text)
@@ -374,5 +397,50 @@ function creole_str_endswith($s, $prefix)
 function creole_debug($msg)
 {
     file_put_contents("creole.log", $msg ."\n", FILE_APPEND);
+}
+
+/**
+ * Provides content for the Creole help block.
+ */
+function _creole_help_block()
+{
+    return t(creole_nl2br(
+	"== Large Heading\n" .
+	"=== Medium Heading\n" .
+	"==== Small Heading\n" .
+	"===== Smaller =====\n" .
+	"(Dashes on right are optional)\n" .
+	"\n" .
+	"Link [[URL|Link Text]]\n" .
+	"Image {{image URL|alt text}}\n" .
+	"both [[URL|{{image URL}}]]\n" .
+	"\n" .
+	"**bold**, //italic//,\n" .
+	"__underlined__, or **//combined//**.\n" .
+	"\n" .
+	"* Bullet lists\n" .
+	"* Second item\n" .
+	"** Sub-item\n" .
+	"* Continued\n" .
+	"\n" .
+	"# Numbered list\n" .
+	"# Second item\n" .
+	"## Sub-item\n" .
+	"\n" .
+	"Forced\\\\linebreak\n" .
+	"\n" .
+	"Horizontal line:\n" .
+	"----\n" . 
+	"\n" .
+/*
+	"|=|=table=|=header=|\n" .
+	"|a|table|row|\n" .
+	"|b|table|row|\n" .
+	"\n" .
+*/
+	"{{{\n" .
+	"== [[Nowiki]]:\n" .
+	"//**don't** format//\n" .
+	"}}}" ));
 }
 ?>
