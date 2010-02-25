@@ -106,11 +106,6 @@ function creole_process_post($text)
     return $text;
 }
 
-function creole_nl2br($text)
-{
-    return str_replace("\n", "<br/>\n", $text);
-}
-
 function creole_process_verbatim($text)
 {
     return '<pre>'. str_replace(' ', '&nbsp;', $text) .'</pre>';
@@ -136,7 +131,6 @@ function creole_process_paragraphs($text)
     $text = join("<br/><br/>", $paragraphs);
     return $text;
 }
-
 
 function creole_process_paragraph($text)
 {
@@ -475,7 +469,7 @@ function creole_debug($msg)
  */
 function _creole_help_block()
 {
-    return t(creole_nl2br(
+    return t(str_replace("\n", "<br/>\n",
 	"== Large Heading\n" .
 	"=== Medium Heading\n" .
 	"==== Small Heading\n" .
