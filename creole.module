@@ -1,6 +1,6 @@
 <?php
 /*
- * Creole wiki markup input filter for Drupal 6.x
+ * Creole wiki markup input filter v0.2.0 for Drupal 6.x
  *
  * Website: https://code.google.com/p/wiki-creole-for-drupal/
  * Author: Keith Kim
