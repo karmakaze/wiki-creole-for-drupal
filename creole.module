@@ -1,6 +1,6 @@
 <?php
 /*
- * Creole wiki markup input filter v0.2.1 for Drupal 6.x
+ * Creole wiki markup input filter v0.2.2 for Drupal 6.x
  *
  * Website: https://code.google.com/p/wiki-creole-for-drupal/
  * Author: Keith Kim
@@ -421,7 +421,9 @@ function creole_process_strikethru($text)
 
 function creole_process_monospace($text)
 {
-  return creole_process_style('/`([^` ]|[^` ].*[^ `])`/U', '<tt>', '</tt>', $text);
+  $text = creole_process_style('/##([^# ]|[^# ].*[^ #])##/U', '<tt>', '</tt>', $text);
+  $text = creole_process_style('/`([^` ]|[^` ].*[^ `])`/U', '<tt>', '</tt>', $text);
+  return $text;
 }
 
 function creole_process_style($re, $l, $r, $text)
