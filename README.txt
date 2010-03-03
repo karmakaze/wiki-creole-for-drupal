@@ -11,7 +11,7 @@ If using the Drupal-supplied URL filter with this filter, have this Creole
 filter configured with a smaller weight (earlier) before the URL filter.
 
 This software is provide AS-IS without warranty of any kind under the
-conditions of the GNU General Public License v3 as described in the
+conditions of the GNU General Public License v2 as described in the
 LICENSE.txt file.
 
 For more information on Wiki Creole markup, see http://wikicreole.org
