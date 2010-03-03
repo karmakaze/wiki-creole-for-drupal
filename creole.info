@@ -4,8 +4,8 @@ package = "Input filters"
 dependencies[] = filter
 core = 6.x
 
-version = "6.x-0.2.0"
+version = "6.x-0.2.1"
 core = "6.x"
 project = "creole"
-datestamp = "1267083900"
+datestamp = "1267548900"
 
